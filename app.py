@@ -1,17 +1,15 @@
 import json
 import os
-from urllib.request import Request, urlopen
-from urllib.error import URLError
+import requests
 from flask import Flask, request, jsonify, render_template_string
 from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)
 
-# Render ના એન્વાયરમેન્ટમાંથી અથવા સીધી કી મેળવવી
-API_KEY = os.environ.get("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY_HERE")
+# Render ના Environment Variables માંથી કી રીડ કરશે
+API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# ફ્રન્ટએન્ડ HTML કોડ સીધો Python વેરિયેબલમાં
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="gu">
@@ -41,11 +39,10 @@ HTML_TEMPLATE = """
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             
+            <!-- Left Side -->
             <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
                 <div>
                     <h2 class="text-lg font-bold text-slate-900 mb-2">૧. તમારું મૂળ કન્ટેન્ટ અહીં નાખો</h2>
-                    <p class="text-slate-500 text-sm mb-4">કોઈપણ લાંબો લેખ, બ્લોગ કે વીડિયોની સ્ક્રિપ્ટ પેસ્ટ કરો.</p>
-                    
                     <textarea id="sourceContent" rows="8" class="w-full p-4 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-slate-700 placeholder-slate-400 resize-none mb-6" placeholder="તમારું લાંબુ કન્ટેન્ટ અહીં લખો અથવા પેસ્ટ કરો..."></textarea>
 
                     <h2 class="text-lg font-bold text-slate-900 mb-2">૨. પ્લેટફોર્મ સિલેક્ટ કરો</h2>
@@ -80,6 +77,7 @@ HTML_TEMPLATE = """
                 </button>
             </div>
 
+            <!-- Right Side -->
             <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
                     <h2 class="text-lg font-bold text-slate-900">જનરેટ થયેલ કન્ટેન્ટ</h2>
@@ -124,9 +122,8 @@ HTML_TEMPLATE = """
             document.getElementById('placeholderText').classList.remove('hidden');
 
             try {
-                // સિંગલ ફાઇલ હોવાથી ડાયરેક્ટ /generate રૂટ પર જ રિક્વેસ્ટ જશે
+                // પ્રોડક્શન માટે પરફેક્ટ રિલેટિવ પાથ
                 const response = await fetch('/generate', {
-
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ content: content, platform: platform })
@@ -140,11 +137,11 @@ HTML_TEMPLATE = """
                     document.getElementById('resultText').innerText = data.generated_text;
                     document.getElementById('outputContainer').classList.remove('hidden');
                 } else {
-                    alert('એરર: ' + data.error);
+                    alert('સર્વર તરફથી ભૂલ: ' + data.error);
                 }
             } catch (error) {
                 document.getElementById('placeholderText').classList.add('hidden');
-                alert('સર્વર કનેક્શનમાં ભૂલ આવી છે.');
+                alert('સર્વર કનેક્શનમાં ભૂલ આવી છે. કૃપા કરીને થોડીવાર પછી પ્રયત્ન કરો.');
             }
         }
 
@@ -161,11 +158,13 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def home():
-    # અલગ ફાઇલ રાખવાને બદલે Python ના વેરિયેબલમાંથી જ HTML રેન્ડર કરવું
     return render_template_string(HTML_TEMPLATE)
 
 @app.route('/generate', methods=['POST'])
 def generate_content():
+    if not API_KEY:
+        return jsonify({"success": False, "error": "Gemini API Key સેટ કરેલી નથી. કૃપા કરીને Render સેટિંગ્સ તપાસો."}), 500
+        
     try:
         data = request.json or {}
         source_text = data.get('content', '').strip()
@@ -174,27 +173,43 @@ def generate_content():
         if not source_text:
             return jsonify({"success": False, "error": "કન્ટેન્ટ ખાલી છે."}), 400
 
-                # એકદમ શાર્પ અને એડવાન્સ પ્રોમ્પ્ટ એન્જિનિયરિંગ
+        # એડવાન્સ શાર્પ પ્રોમ્પ્ટ
         system_prompt = f"""
         You are an elite, highly paid Social Media Copywriter. 
         Your job is to REPURPOSE and CONDENSE the source text into a high-performing {platform} post in GUJARATI.
 
         CRITICAL RULES:
         1. DO NOT just copy-paste or translate the source text. Rewrite it completely to match the platform's style.
-        2. COMPRESSION: If the input is long, extract only the top 3 core actionable insights. Cut the fluff.
+        2. COMPRESSION: Extract only the top 3 core actionable insights. Cut the fluff.
         3. PLATFORM SPECIFIC FORMAT:
-           - If 'linkedin': Start with a bold, shocking or highly relatable hook sentence. Use exactly 3 bullet points with emojis. End with an engaging question for comments. Keep it under 150 words.
-           - If 'twitter': Must be under 280 characters. Write a maximum of 2 punchy sentences, 1 emoji, and 2 tags. Absolute brevity is required.
-           - If 'reels': Give a clear "3-Second Hook Idea" for the video, then 2 sentences of video description, and a call-to-action (e.g., Save this reel).
-        4. Output ONLY the finalized post in Gujarati. No intros, no outros, no "Here is your post".
+           - If 'linkedin': Start with a bold hook. Use exactly 3 bullet points with emojis. End with an engaging question. Keep it short.
+           - If 'twitter': Must be under 280 characters. Write max 2 punchy sentences, 1 emoji, and 2 tags.
+           - If 'reels': Give a clear "3-Second Hook Idea", then a short caption and relevant hashtags.
+        4. Output ONLY the finalized post in Gujarati. No extra conversation.
 
         Source Text:
         {source_text}
         """
 
+        # Gemini 2.5 Flash API URL
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
+        
+        headers = {"Content-Type": "application/json"}
+        payload = {"contents": [{"parts": [{"text": system_prompt}]}]}
+        
+        # requests લાઇબ્રેરીનો ઉપયોગ કરીને વધુ સુરક્ષિત અને સ્ટેબલ કોલ
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+        if response.status_code != 200:
+            return jsonify({"success": False, "error": f"Gemini API Error (Status {response.status_code}): {response.text}"}), 500
+            
+        result = response.json()
+        generated_text = result['candidates'][0]['content']['parts'][0]['text']
+        
+        return jsonify({"success": True, "generated_text": generated_text})
 
-    except URLError as e:
-        return jsonify({"success": False, "error": f"API Error: {str(e)}"}), 500
+    except requests.exceptions.Timeout:
+        return jsonify({"success": False, "error": "Gemini API તરફથી જવાબ મળવામાં સમય લાગ્યો (Timeout)."}), 544
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
