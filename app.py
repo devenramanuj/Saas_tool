@@ -126,6 +126,7 @@ HTML_TEMPLATE = """
             try {
                 // સિંગલ ફાઇલ હોવાથી ડાયરેક્ટ /generate રૂટ પર જ રિક્વેસ્ટ જશે
                 const response = await fetch('/generate', {
+
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ content: content, platform: platform })
