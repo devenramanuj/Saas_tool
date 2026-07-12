@@ -173,20 +173,24 @@ def generate_content():
         if not source_text:
             return jsonify({"success": False, "error": "કન્ટેન્ટ ખાલી છે."}), 400
 
-        system_prompt = f"તમે એક એક્સપર્ટ સોશિયલ મીડિયા રાઇટર છો. નીચે આપેલા લખાણનો મુખ્ય અર્થ સમજીને તેમાંથી {platform} માટે એક એકદમ આકર્ષક, વ્યવસ્થિત ફોર્મેટવાળી અને વાયરલ થાય તેવી ગુજરાતી પોસ્ટ તૈયાર કરો. લખાણમાં વિષયને અનુરૂપ યોગ્ય ઇમોજી અને હેશટેગ વાપરો. માત્ર ફાઇનલ પોસ્ટ જ આપો, કોઈ વધારાની વાતચીત લખશો નહીં.\n\nમૂળ લખાણ:\n{source_text}"
+                # એકદમ શાર્પ અને એડવાન્સ પ્રોમ્પ્ટ એન્જિનિયરિંગ
+        system_prompt = f"""
+        You are an elite, highly paid Social Media Copywriter. 
+        Your job is to REPURPOSE and CONDENSE the source text into a high-performing {platform} post in GUJARATI.
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
-        payload = {"contents": [{"parts": [{"text": system_prompt}]}]}
-        jsondata = json.dumps(payload).encode('utf-8')
-        
-        req = Request(url, data=jsondata, headers={'Content-Type': 'application/json'}, method='POST')
-        
-        with urlopen(req) as response:
-            result = json.loads(response.read().decode('utf-8'))
-            
-        generated_text = result['candidates'][0]['content']['parts'][0]['text']
-        
-        return jsonify({"success": True, "generated_text": generated_text})
+        CRITICAL RULES:
+        1. DO NOT just copy-paste or translate the source text. Rewrite it completely to match the platform's style.
+        2. COMPRESSION: If the input is long, extract only the top 3 core actionable insights. Cut the fluff.
+        3. PLATFORM SPECIFIC FORMAT:
+           - If 'linkedin': Start with a bold, shocking or highly relatable hook sentence. Use exactly 3 bullet points with emojis. End with an engaging question for comments. Keep it under 150 words.
+           - If 'twitter': Must be under 280 characters. Write a maximum of 2 punchy sentences, 1 emoji, and 2 tags. Absolute brevity is required.
+           - If 'reels': Give a clear "3-Second Hook Idea" for the video, then 2 sentences of video description, and a call-to-action (e.g., Save this reel).
+        4. Output ONLY the finalized post in Gujarati. No intros, no outros, no "Here is your post".
+
+        Source Text:
+        {source_text}
+        """
+
 
     except URLError as e:
         return jsonify({"success": False, "error": f"API Error: {str(e)}"}), 500
